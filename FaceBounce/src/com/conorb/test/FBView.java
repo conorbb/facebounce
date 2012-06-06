@@ -30,9 +30,15 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 		private Handler  mHandler;
 		private boolean isMoving;
 		//Position
-		private float xPos, yPos;
+		//private float xPos, yPos;
+		private float [] coOrdPairs;  //xyxyxyxy...
+		private float [] velocityPairs; //dXdYdXdY....
+		private int [] ballColor;
+		private final int NUM_BALLS = 13 ;
+		
 		// Velocity
-		private float mDY, mDX;
+		//private float mDY, mDX;
+		private Random myRandom;
 		private long mLastTime;
 		private boolean mRun;
 		private Paint mPaint;
@@ -45,13 +51,37 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 			mContext = context;
 			mHandler = handler;
 			isMoving = false;
-			xPos = 150f;
-			yPos = 150f;
 			
-			Random r = new Random();
+			//xPos = 150f;
+			//yPos = 150f;
 			
-			mDY = r.nextInt(30+1);
-			mDX = r.nextInt(30+1);
+			myRandom = new Random();
+			
+			//create single ball
+			//mDY = myRandom.nextInt(30+1);
+			//mDX = myRandom.nextInt(30+1);
+			
+			//create arrays of balls and their speed
+			coOrdPairs = new float [NUM_BALLS*2];
+			velocityPairs = new float [NUM_BALLS*2];
+			// create array of colors
+			ballColor = new int[NUM_BALLS];
+			
+			
+			for(int i = 0;i< NUM_BALLS *2; i+=2){
+				
+				coOrdPairs[i] = (float)myRandom.nextInt(200 -50) + 25;		//x
+				coOrdPairs[i+1] = (float)myRandom.nextInt(400 -50) + 25;	//y
+				
+				velocityPairs[i] = (float)myRandom.nextInt(10)+1;		//dx
+				velocityPairs[i+1] = (float)myRandom.nextInt(10)+1;	//dy
+				
+			}
+			
+			for(int i = 0;i< NUM_BALLS; i++){
+				ballColor [i] = Color.rgb(myRandom.nextInt(255), myRandom.nextInt(255), myRandom.nextInt(255));
+			}
+			
 			mPaint = new Paint();
 			//mRun = true;
 			doStart();
@@ -108,17 +138,31 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
         	
         	
         	//Clear the canvas.
-            can.drawColor(Color.WHITE);
+            can.drawColor(Color.GRAY);
         	
-            //Draw the ball in the new position
-            mPaint.setColor(Color.RED);
-        	can.drawCircle(xPos, yPos, 25, mPaint);
+            //Draw the one ball in the new position
+            //drawBall(xPos,yPos,can);
+        	
+            //Draw the balls in the array
+			for(int i = 0;i< NUM_BALLS *2; i+=2){
+				
+				drawBall(coOrdPairs[i], coOrdPairs[i+1], can,ballColor [i/2] );
+	
+			}
+        	
+        	
+        	
+        	
+        }
+        
+        private void drawBall(float x, float y ,Canvas can,int color){
+        	
+            mPaint.setColor(color);
+        	can.drawCircle(x, y, 25, mPaint);
         	mPaint.setColor(Color.WHITE);
-        	can.drawCircle(xPos, yPos, 15, mPaint);
-        	mPaint.setColor(Color.RED);
-        	can.drawCircle(xPos, yPos, 5, mPaint);
-        	
-        	
+        	can.drawCircle(x, y, 15, mPaint);
+        	mPaint.setColor(color);
+        	can.drawCircle(x, y, 5, mPaint);
         }
         
         private void doMovement(){
@@ -132,15 +176,28 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
         	if (timeNow > mLastTime) {
         		
         		//Do the move!
-        		yPos+= mDY;
-        		xPos+= mDX;
+        		//yPos+= mDY;
+        		//xPos+= mDX;
         		
         		//Hit a corner, switch direction!
-        		if(yPos> mCanvasArea.bottom || yPos < mCanvasArea.top) mDY *= -1;
+        		//if(yPos  > mCanvasArea.bottom -25 || yPos  < mCanvasArea.top + 25) mDY *= -1;
         		
         		
-        		if(xPos> mCanvasArea.right || xPos < mCanvasArea.left) mDX *= -1;
+        		//if(xPos > mCanvasArea.right -25|| xPos < mCanvasArea.left +25) mDX *= -1;
         		
+        		
+    			for(int i = 0;i< NUM_BALLS *2; i+=2){
+    				
+    				//Move our balls
+    				coOrdPairs[i] = coOrdPairs[i]  + velocityPairs[i];
+    				coOrdPairs[i+1] = coOrdPairs[i+1]  + velocityPairs[i+1];
+    				
+    				// Check if our balls are touching a wall, if so change their direction;
+    				if(coOrdPairs[i] > mCanvasArea.right -25|| coOrdPairs[i] < mCanvasArea.left +25) velocityPairs[i] *= -1;
+    				
+            		if(coOrdPairs[i+1]  > mCanvasArea.bottom -25 || coOrdPairs[i+1]  < mCanvasArea.top + 25) velocityPairs[i+1] *= -1;
+            		
+    			}
         		
         		
         		
