@@ -3,6 +3,7 @@ package com.conorb.test;
 
 
 
+
 import java.util.Random;
 
 import android.content.Context;
@@ -16,6 +17,7 @@ import android.os.Message;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.*;
+import android.widget.SlidingDrawer;
 
 public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 	
@@ -43,17 +45,23 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 		private boolean mRun;
 		private Paint mPaint;
 		private Rect mCanvasArea;
-		//long whileCount =0;
+		
+		private boolean eventToConsume;
+		private float eventX, eventY;
+		private int mTouchedCount;
 		
 		public FBThread(SurfaceHolder surfaceHolder, Context context, Handler handler){
 			Log.v("FB Thread","Constructor called!");
 			mSurfaceHolder = surfaceHolder;
+			
+			
 			mContext = context;
 			mHandler = handler;
 			isMoving = false;
 			
 			//xPos = 150f;
 			//yPos = 150f;
+			
 			
 			myRandom = new Random();
 			
@@ -66,15 +74,15 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 			velocityPairs = new float [NUM_BALLS*2];
 			// create array of colors
 			ballColor = new int[NUM_BALLS];
-			
+			mTouchedCount= NUM_BALLS ;
 			
 			for(int i = 0;i< NUM_BALLS *2; i+=2){
 				
-				coOrdPairs[i] = (float)myRandom.nextInt(200 -50) + 25;		//x
-				coOrdPairs[i+1] = (float)myRandom.nextInt(400 -50) + 25;	//y
+				coOrdPairs[i] = (float)myRandom.nextInt(250 -50) + 25;		//x
+				coOrdPairs[i+1] = (float)myRandom.nextInt(450 -50) + 25;	//y
 				
-				velocityPairs[i] = (float)myRandom.nextInt(10)+1;		//dx
-				velocityPairs[i+1] = (float)myRandom.nextInt(10)+1;	//dy
+				velocityPairs[i] = (float)myRandom.nextInt(20)-10;		//dx
+				velocityPairs[i+1] = (float)myRandom.nextInt(20)-10;	//dy
 				
 			}
 			
@@ -91,6 +99,9 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 		
 		public void doStart(){
 			//TODO find out why this is important.
+			
+		
+			
 			synchronized (mSurfaceHolder){
 				Log.v("FB Thread","Do start called!");
 				//m
@@ -104,7 +115,9 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
         	Log.v("FB Thread","Thread going!");
         	
         	
-        	//mSurfaceHolder.lockCanvas().getClipBounds();
+        	Canvas canTemp = mSurfaceHolder.lockCanvas();
+			mCanvasArea = canTemp.getClipBounds();
+			mSurfaceHolder.unlockCanvasAndPost(canTemp);
         	
             while (mRun) {
             	Canvas c = null;
@@ -113,7 +126,7 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
                 
                 try {
                     c = mSurfaceHolder.lockCanvas();
-                    mCanvasArea = c.getClipBounds();
+                    
                     synchronized (mSurfaceHolder) {
                     	//TODO  Draw method
                     	doDraw(c);
@@ -121,7 +134,11 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
                     	
                     	doMovement();
                     }
-                } finally {
+                }
+                catch(Exception e){
+                	e.printStackTrace();
+                }
+                finally {
                     // do this in a finally so that if an exception is thrown
                     // during the above, we don't leave the Surface in an
                     // inconsistent state
@@ -138,7 +155,7 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
         	
         	
         	//Clear the canvas.
-            can.drawColor(Color.GRAY);
+            can.drawColor(Color.BLACK);
         	
             //Draw the one ball in the new position
             //drawBall(xPos,yPos,can);
@@ -149,8 +166,9 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 				drawBall(coOrdPairs[i], coOrdPairs[i+1], can,ballColor [i/2] );
 	
 			}
-        	
-        	
+			mPaint.setColor(Color.WHITE);
+			mPaint.setTextSize(20);
+        	can.drawText("Remaining Balls: " + mTouchedCount, 15f, (float)mCanvasArea.bottom, mPaint);
         	
         	
         }
@@ -188,6 +206,16 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
         		
     			for(int i = 0;i< NUM_BALLS *2; i+=2){
     				
+            		if(eventToConsume==true && mTouchedCount > 0){
+            			//If the touch event is near any balls. Change their color to white.
+            			if(Math.abs(coOrdPairs[i] - eventX) < 25 && Math.abs(coOrdPairs[i+1] - eventY) < 25){
+            				ballColor[i/2] = Color.WHITE;
+            				mTouchedCount--;
+            			}
+            			
+            		}
+    				
+    				
     				//Move our balls
     				coOrdPairs[i] = coOrdPairs[i]  + velocityPairs[i];
     				coOrdPairs[i+1] = coOrdPairs[i+1]  + velocityPairs[i+1];
@@ -197,11 +225,23 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
     				
             		if(coOrdPairs[i+1]  > mCanvasArea.bottom -25 || coOrdPairs[i+1]  < mCanvasArea.top + 25) velocityPairs[i+1] *= -1;
             		
+
+            		
     			}
         		
         		
         		
         		mLastTime+=50;
+        		eventToConsume = false;
+        	}
+        	
+        }
+        
+        private void doTouchEvent(float x, float y){
+        	synchronized (mSurfaceHolder) {
+		        	eventX = x;
+		        	eventY = y;
+		        	eventToConsume = true;
         	}
         	
         }
@@ -271,6 +311,8 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
             }
         });
         setFocusable(true);
+        
+        
 	}
 
     public void surfaceCreated(SurfaceHolder holder) {
@@ -296,6 +338,7 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
         
         thread.setRunning(false);
         Log.v("FBView", "Trying thread.join()");
+        
         while (retry) {
             try {
             	
@@ -304,7 +347,10 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
             } catch (InterruptedException e) {
             	
             }
+            
         }
+        
+        
         
     }
     
@@ -313,6 +359,17 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
     	  Log.v("FBView", "In surface changed!");
         thread.setSurfaceSize(width, height);
     }
+
+	@Override
+	public boolean onTouchEvent(MotionEvent event) {
+		// TODO Auto-generated method stub
+		
+		thread.doTouchEvent(event.getX(), event.getY());
+		
+		return super.onTouchEvent(event);
+	}
+    
+    
     
     
 	
