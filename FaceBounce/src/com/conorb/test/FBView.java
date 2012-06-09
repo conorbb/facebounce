@@ -6,9 +6,14 @@ package com.conorb.test;
 
 import java.util.Random;
 
+
+
 import android.content.Context;
+import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Canvas.VertexMode;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
@@ -17,94 +22,103 @@ import android.os.Message;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.*;
-import android.widget.SlidingDrawer;
 
 public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 	
 	private FBThread thread;
-	private Context mContext;
+
 	
 	class FBThread extends Thread   {
 		
 		// Reference to stuff that we need to use to animate
 		private SurfaceHolder mSurfaceHolder;
 		
-		private Handler  mHandler;
-		private boolean isMoving;
-		//Position
-		//private float xPos, yPos;
-		private float [] coOrdPairs;  //xyxyxyxy...
-		private float [] velocityPairs; //dXdYdXdY....
-		private int [] ballColor;
-		private final int NUM_BALLS = 13 ;
+
+		//Shape Position information and appearance
+		//
+		private float [] shapeLocationPairs;  //xy xy xy...
+		private float [] velocityPairs; //dXdY dXdY....
+		private int [] shapeColor;
+		private int [] shapeType;
 		
-		// Velocity
-		//private float mDY, mDX;
+		private static final int NUM_OBJECTS = 13 ;
+		
 		private Random myRandom;
 		private long mLastTime;
 		private boolean mRun;
 		private Paint mPaint;
 		private Rect mCanvasArea;
-		
+		private Bitmap mbgImg;
+		private Bitmap cbImg;
 		private boolean eventToConsume;
 		private float eventX, eventY;
 		private int mTouchedCount;
+		
+
+		//Different Shapes
+		public static final int SHAPE_CIRCLE = 0;
+		public static final int SHAPE_SQUARE = 1;
+		public static final int SHAPE_TRIANGLE = 2;
+		public static final int SHAPE_BMP = 3;
+		public static final int SHAPE_PENTAGON = 4;
+		
+		
 		
 		public FBThread(SurfaceHolder surfaceHolder, Context context, Handler handler){
 			Log.v("FB Thread","Constructor called!");
 			mSurfaceHolder = surfaceHolder;
 			
 			
-			mContext = context;
-			mHandler = handler;
-			isMoving = false;
+			Resources res = context.getResources();
+			mbgImg = BitmapFactory.decodeResource(res,R.drawable.bg);
+			cbImg = BitmapFactory.decodeResource(res,R.drawable.cb);
 			
-			//xPos = 150f;
-			//yPos = 150f;
-			
-			
-			myRandom = new Random();
-			
-			//create single ball
-			//mDY = myRandom.nextInt(30+1);
-			//mDX = myRandom.nextInt(30+1);
-			
-			//create arrays of balls and their speed
-			coOrdPairs = new float [NUM_BALLS*2];
-			velocityPairs = new float [NUM_BALLS*2];
-			// create array of colors
-			ballColor = new int[NUM_BALLS];
-			mTouchedCount= NUM_BALLS ;
-			
-			for(int i = 0;i< NUM_BALLS *2; i+=2){
-				
-				coOrdPairs[i] = (float)myRandom.nextInt(250 -50) + 25;		//x
-				coOrdPairs[i+1] = (float)myRandom.nextInt(450 -50) + 25;	//y
-				
-				velocityPairs[i] = (float)myRandom.nextInt(20)-10;		//dx
-				velocityPairs[i+1] = (float)myRandom.nextInt(20)-10;	//dy
-				
-			}
-			
-			for(int i = 0;i< NUM_BALLS; i++){
-				ballColor [i] = Color.rgb(myRandom.nextInt(255), myRandom.nextInt(255), myRandom.nextInt(255));
-			}
 			
 			mPaint = new Paint();
-			//mRun = true;
 			doStart();
 			
 			
 		}
 		
 		public void doStart(){
-			//TODO find out why this is important.
+			// Do initial setup of shapes
 			
 		
 			
 			synchronized (mSurfaceHolder){
 				Log.v("FB Thread","Do start called!");
-				//m
+				
+				myRandom = new Random();
+				
+				
+				
+				//create arrays of shapes and their speed
+				shapeLocationPairs = new float [NUM_OBJECTS*2];
+				velocityPairs = new float [NUM_OBJECTS*2];
+				
+				// create array of colors and shape types
+				shapeColor = new int[NUM_OBJECTS];
+				shapeType = new int[NUM_OBJECTS];
+				mTouchedCount= NUM_OBJECTS ;
+				
+				
+				// Initialize shapes with random positions and speed
+				for(int i = 0;i< NUM_OBJECTS *2; i+=2){
+					
+					shapeLocationPairs[i] = (float)myRandom.nextInt(250 -50) + 25;		//x
+					shapeLocationPairs[i+1] = (float)myRandom.nextInt(450 -50) + 25;	//y
+					
+					velocityPairs[i] = (float)myRandom.nextInt(20)-10;		//dx
+					velocityPairs[i+1] = (float)myRandom.nextInt(20)-10;	//dy
+					
+				}
+				
+				// Randomize the shape and color of each object
+				for(int i = 0;i< NUM_OBJECTS; i++){
+					shapeColor [i] = Color.rgb(myRandom.nextInt(255), myRandom.nextInt(255), myRandom.nextInt(255));
+					shapeType [i] = myRandom.nextInt(4);	
+				}
+				
 				mLastTime = System.currentTimeMillis() + 100;
 				
 			}
@@ -128,10 +142,10 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
                     c = mSurfaceHolder.lockCanvas();
                     
                     synchronized (mSurfaceHolder) {
-                    	//TODO  Draw method
+                    	// Draw method
                     	doDraw(c);
-                    	//TODO  Physics method
                     	
+                    	//  Physics method
                     	doMovement();
                     }
                 }
@@ -154,34 +168,76 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
         private void doDraw(Canvas can){
         	
         	
-        	//Clear the canvas.
-            can.drawColor(Color.BLACK);
+        	//Clear the canvas by drawing the background.
+        	can.drawBitmap(mbgImg, 0, 0, null);
+
         	
-            //Draw the one ball in the new position
-            //drawBall(xPos,yPos,can);
         	
-            //Draw the balls in the array
-			for(int i = 0;i< NUM_BALLS *2; i+=2){
+            //Draw the shapes in the array
+			for(int i = 0;i< NUM_OBJECTS *2; i+=2){
 				
-				drawBall(coOrdPairs[i], coOrdPairs[i+1], can,ballColor [i/2] );
-	
+				if(shapeType[i/2]== SHAPE_CIRCLE){
+					drawBall(shapeLocationPairs[i], shapeLocationPairs[i+1], can,shapeColor [i/2] );
+				}
+				else if(shapeType[i/2]== SHAPE_SQUARE){
+					//call drawSquare
+					drawSquare(shapeLocationPairs[i], shapeLocationPairs[i+1], can,shapeColor [i/2] );
+				}
+				else if(shapeType[i/2]== SHAPE_TRIANGLE){
+					drawTriangle(shapeLocationPairs[i], shapeLocationPairs[i+1], can,shapeColor [i/2] );
+				}
+				else if(shapeType[i/2]== SHAPE_BMP){
+					drawBMP(shapeLocationPairs[i], shapeLocationPairs[i+1], can,shapeColor [i/2] );
+				}
+				
 			}
 			mPaint.setColor(Color.WHITE);
 			mPaint.setTextSize(20);
-        	can.drawText("Remaining Balls: " + mTouchedCount, 15f, (float)mCanvasArea.bottom, mPaint);
+        	can.drawText("Remaining Shapes: " + mTouchedCount, 15f, (float)mCanvasArea.bottom-5, mPaint);
         	
         	
         }
         
         private void drawBall(float x, float y ,Canvas can,int color){
-        	
-            mPaint.setColor(color);
-        	can.drawCircle(x, y, 25, mPaint);
-        	mPaint.setColor(Color.WHITE);
-        	can.drawCircle(x, y, 15, mPaint);
-        	mPaint.setColor(color);
-        	can.drawCircle(x, y, 5, mPaint);
+        	if(color!=Color.BLACK){
+	            mPaint.setColor(color);
+	        	can.drawCircle(x, y, 25, mPaint);
+	        	mPaint.setColor(Color.WHITE);
+	        	can.drawCircle(x, y, 15, mPaint);
+	        	mPaint.setColor(color);
+	        	can.drawCircle(x, y, 5, mPaint);
+        	}
         }
+        
+        private void drawBMP(float x, float y ,Canvas can,int color){
+        	if(color!=Color.BLACK){
+        		can.drawBitmap(cbImg, null, new Rect((int)x-25,(int) y-25,(int) x+25,(int) y+25), mPaint);
+        	}
+        }
+        
+        private void drawSquare(float x, float y ,Canvas can,int color){
+        	if(color!=Color.BLACK){
+        		mPaint.setColor(color);
+        		can.drawRect(x-25, y-25, x+25, y+25, mPaint);
+        	}
+        }
+        
+        private void drawTriangle(float x, float y ,Canvas can,int color){
+        	if(color!=Color.BLACK){
+        		mPaint.setColor(color);
+        		//can.
+        		float [] triangleVerts = new float [] {x,y,x,y-25,x+25,y-25};
+        		
+        		int verticesColors[] = {
+        			    color, color, color,
+        			    0xFF000000, 0xFF000000, 0xFF000000
+        			};
+        		
+        		
+        		can.drawVertices(VertexMode.TRIANGLES, triangleVerts.length,triangleVerts, 0, null, 0, verticesColors, 0, null, 0, 0, mPaint);
+        	}
+        }
+        
         
         private void doMovement(){
         	
@@ -192,38 +248,32 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
         	// Target time is initialized at start of program as currentSystemTimeMillis()+100
         	//
         	if (timeNow > mLastTime) {
-        		
-        		//Do the move!
-        		//yPos+= mDY;
-        		//xPos+= mDX;
-        		
-        		//Hit a corner, switch direction!
-        		//if(yPos  > mCanvasArea.bottom -25 || yPos  < mCanvasArea.top + 25) mDY *= -1;
-        		
-        		
-        		//if(xPos > mCanvasArea.right -25|| xPos < mCanvasArea.left +25) mDX *= -1;
-        		
-        		
-    			for(int i = 0;i< NUM_BALLS *2; i+=2){
+        			
+    			for(int i = 0;i< NUM_OBJECTS *2; i+=2){
     				
+    				// Handle touch event
             		if(eventToConsume==true && mTouchedCount > 0){
-            			//If the touch event is near any balls. Change their color to white.
-            			if(Math.abs(coOrdPairs[i] - eventX) < 25 && Math.abs(coOrdPairs[i+1] - eventY) < 25){
-            				ballColor[i/2] = Color.WHITE;
-            				mTouchedCount--;
+            			// If the touch event is near any shapes. Change their color to black.
+            			// Draw method does not draw black balls (makes them disappear )
+            			if(Math.abs(shapeLocationPairs[i] - eventX) < 25 && Math.abs(shapeLocationPairs[i+1] - eventY) < 25){
+            				if(shapeColor[i/2] != Color.BLACK){
+            					shapeColor[i/2] = Color.BLACK;
+            					mTouchedCount--;
+            				}
             			}
             			
             		}
     				
     				
-    				//Move our balls
-    				coOrdPairs[i] = coOrdPairs[i]  + velocityPairs[i];
-    				coOrdPairs[i+1] = coOrdPairs[i+1]  + velocityPairs[i+1];
+    				//Move our shapes
+    				shapeLocationPairs[i] = shapeLocationPairs[i]  + velocityPairs[i];		    // Move X
+    				shapeLocationPairs[i+1] = shapeLocationPairs[i+1]  + velocityPairs[i+1];    //Move Y
     				
-    				// Check if our balls are touching a wall, if so change their direction;
-    				if(coOrdPairs[i] > mCanvasArea.right -25|| coOrdPairs[i] < mCanvasArea.left +25) velocityPairs[i] *= -1;
+    				// Check if our shapes are touching a wall, if so change their direction;
+    				// TODO Predictive collisions. Current method will fail on high speed balls
+    				if(shapeLocationPairs[i] > mCanvasArea.right -25|| shapeLocationPairs[i] < mCanvasArea.left +25) velocityPairs[i] *= -1;
     				
-            		if(coOrdPairs[i+1]  > mCanvasArea.bottom -25 || coOrdPairs[i+1]  < mCanvasArea.top + 25) velocityPairs[i+1] *= -1;
+            		if(shapeLocationPairs[i+1]  > mCanvasArea.bottom -25 || shapeLocationPairs[i+1]  < mCanvasArea.top + 25) velocityPairs[i+1] *= -1;
             		
 
             		
@@ -299,8 +349,9 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 	
 	private void  setupThread(Context context, SurfaceHolder holder){
 		
-        //holder.addCallback(this);
+        
 		Log.v("FB View"," Setting up thread!");
+		
         // create thread only; it's started in surfaceCreated()
 		//TODO pass null handler for the Minute, find out what it does later!
         thread = new FBThread(holder, context, new Handler() {
@@ -362,7 +413,6 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 
 	@Override
 	public boolean onTouchEvent(MotionEvent event) {
-		// TODO Auto-generated method stub
 		
 		thread.doTouchEvent(event.getX(), event.getY());
 		
@@ -373,5 +423,5 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
     
     
 	
-
+	
 }
