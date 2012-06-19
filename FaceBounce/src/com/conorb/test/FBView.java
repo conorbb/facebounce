@@ -140,7 +140,7 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 				}
 				mAlphaVal =0;
 				mAlphaIncreasing = true;
-				mLastTime = System.currentTimeMillis() + 100;
+				mLastTime = System.currentTimeMillis() + 50;
 				gameState = GAME_STATE_RUNNING;
 				mMediaPlayer.setVolume(mMusicVol, mMusicVol);
 				mMediaPlayer.start();
