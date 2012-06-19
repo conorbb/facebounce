@@ -17,6 +17,7 @@ import android.graphics.Canvas.VertexMode;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.Message;
 import android.util.AttributeSet;
@@ -53,14 +54,30 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 		private boolean eventToConsume;
 		private float eventX, eventY;
 		private int mTouchedCount;
+		private int mAlphaVal;
+		private boolean mAlphaIncreasing;
+		private long msAtstart;
+		private long msAtEnd;
+		
+		private float mMusicVol;
+		
+		private MediaPlayer mMediaPlayer;
+		
+		private int gameState;
+		
 		
 
 		//Different Shapes
 		public static final int SHAPE_CIRCLE = 0;
 		public static final int SHAPE_SQUARE = 1;
-		public static final int SHAPE_TRIANGLE = 2;
-		public static final int SHAPE_BMP = 3;
+		/// TODO GET RID OF TRIANGLES
+		
+		public static final int SHAPE_BMP = 2;
+		public static final int SHAPE_TRIANGLE = 3;
 		public static final int SHAPE_PENTAGON = 4;
+		
+		public static final int GAME_STATE_RUNNING =0;
+		public static final int GAME_STATE_COMPLETED =1;
 		
 		
 		
@@ -72,7 +89,7 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 			Resources res = context.getResources();
 			mbgImg = BitmapFactory.decodeResource(res,R.drawable.bg);
 			cbImg = BitmapFactory.decodeResource(res,R.drawable.cb);
-			
+			mMediaPlayer = MediaPlayer.create(context, R.raw.tt);
 			
 			mPaint = new Paint();
 			doStart();
@@ -82,7 +99,9 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 		
 		public void doStart(){
 			// Do initial setup of shapes
-			
+			msAtstart = System.currentTimeMillis();
+			msAtEnd=0;
+			mMusicVol=1f;
 		
 			
 			synchronized (mSurfaceHolder){
@@ -108,18 +127,23 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 					shapeLocationPairs[i] = (float)myRandom.nextInt(250 -50) + 25;		//x
 					shapeLocationPairs[i+1] = (float)myRandom.nextInt(450 -50) + 25;	//y
 					
-					velocityPairs[i] = (float)myRandom.nextInt(20)-10;		//dx
-					velocityPairs[i+1] = (float)myRandom.nextInt(20)-10;	//dy
+					velocityPairs[i] = ((float)myRandom.nextInt(2000)-1000)/100;		//dx
+					velocityPairs[i+1] = ((float)myRandom.nextInt(2000)-1000)/100;	//dy
 					
 				}
 				
 				// Randomize the shape and color of each object
 				for(int i = 0;i< NUM_OBJECTS; i++){
 					shapeColor [i] = Color.rgb(myRandom.nextInt(255), myRandom.nextInt(255), myRandom.nextInt(255));
-					shapeType [i] = myRandom.nextInt(4);	
+					shapeType [i] = myRandom.nextInt(3);
+					
 				}
-				
+				mAlphaVal =0;
+				mAlphaIncreasing = true;
 				mLastTime = System.currentTimeMillis() + 100;
+				gameState = GAME_STATE_RUNNING;
+				mMediaPlayer.setVolume(mMusicVol, mMusicVol);
+				mMediaPlayer.start();
 				
 			}
 		}
@@ -147,6 +171,9 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
                     	
                     	//  Physics method
                     	doMovement();
+                    	
+                    	//Check
+                    	checkConditions();
                     }
                 }
                 catch(Exception e){
@@ -162,6 +189,7 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
                 }
                 
             }
+            mMediaPlayer.release();
             
         }
         
@@ -170,6 +198,10 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
         	
         	//Clear the canvas by drawing the background.
         	can.drawBitmap(mbgImg, 0, 0, null);
+
+
+        		can.drawARGB(mAlphaVal, 0, 0, 0);
+
 
         	
         	
@@ -191,10 +223,24 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
 				}
 				
 			}
-			mPaint.setColor(Color.WHITE);
-			mPaint.setTextSize(20);
-        	can.drawText("Remaining Shapes: " + mTouchedCount, 15f, (float)mCanvasArea.bottom-5, mPaint);
+			
+			if(gameState==GAME_STATE_RUNNING){
+				mPaint.setColor(Color.WHITE);
+				mPaint.setTextSize(20);
+				can.drawText("Remaining Shapes: " + mTouchedCount, 15f, (float)mCanvasArea.bottom-5, mPaint);
+			}
+			else if (gameState==GAME_STATE_COMPLETED){
+	        	can.drawARGB(100, 0, 0, 0);
+	        	mPaint.setTextSize(50);
+	        	can.drawText("You Won!", 15f, (float)mCanvasArea.bottom/2, mPaint);
+	        	mPaint.setTextSize(30);
+	        	can.drawText("Time Taken: " + ((msAtEnd - msAtstart)/1000) + " Seconds", 15f, (float)mCanvasArea.bottom/2+30, mPaint);
+	        	
+	        	
+			}
         	
+        	
+
         	
         }
         
@@ -240,51 +286,109 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
         
         
         private void doMovement(){
-        	
+
+
+
         	//get current system time
         	long timeNow = System.currentTimeMillis();
-        	
+
         	// If the current time is less than the target time do nothing.
         	// Target time is initialized at start of program as currentSystemTimeMillis()+100
         	//
         	if (timeNow > mLastTime) {
-        			
-    			for(int i = 0;i< NUM_OBJECTS *2; i+=2){
-    				
-    				// Handle touch event
-            		if(eventToConsume==true && mTouchedCount > 0){
-            			// If the touch event is near any shapes. Change their color to black.
-            			// Draw method does not draw black balls (makes them disappear )
-            			if(Math.abs(shapeLocationPairs[i] - eventX) < 25 && Math.abs(shapeLocationPairs[i+1] - eventY) < 25){
-            				if(shapeColor[i/2] != Color.BLACK){
-            					shapeColor[i/2] = Color.BLACK;
-            					mTouchedCount--;
-            				}
-            			}
-            			
-            		}
-    				
-    				
-    				//Move our shapes
-    				shapeLocationPairs[i] = shapeLocationPairs[i]  + velocityPairs[i];		    // Move X
-    				shapeLocationPairs[i+1] = shapeLocationPairs[i+1]  + velocityPairs[i+1];    //Move Y
-    				
-    				// Check if our shapes are touching a wall, if so change their direction;
-    				// TODO Predictive collisions. Current method will fail on high speed balls
-    				if(shapeLocationPairs[i] > mCanvasArea.right -25|| shapeLocationPairs[i] < mCanvasArea.left +25) velocityPairs[i] *= -1;
-    				
-            		if(shapeLocationPairs[i+1]  > mCanvasArea.bottom -25 || shapeLocationPairs[i+1]  < mCanvasArea.top + 25) velocityPairs[i+1] *= -1;
-            		
+        		if(gameState == GAME_STATE_RUNNING){
+        			// Change the alpha value to play around with the background
+        			if(mAlphaIncreasing){
+        				if(mAlphaVal < 240){
+        					mAlphaVal += 10;
+        				}
+        				else
+        				{
+        					mAlphaVal += 10;
+        					mAlphaIncreasing=false;
+        				}
 
-            		
-    			}
-        		
-        		
-        		
+        			}
+        			else{
+        				if(mAlphaVal > 10){
+        					mAlphaVal -= 10;
+        				}
+        				else
+        				{
+        					mAlphaVal -= 10;
+        					mAlphaIncreasing=true;
+        				}
+        			}
+
+
+
+        			for(int i = 0;i< NUM_OBJECTS *2; i+=2){
+
+        				// Handle touch event
+        				if(eventToConsume==true && mTouchedCount > 0){
+        					// If the touch event is near any shapes. Change their color to black.
+        					// Draw method does not draw black balls (makes them disappear )
+        					if(Math.abs(shapeLocationPairs[i] - eventX) < 25 && Math.abs(shapeLocationPairs[i+1] - eventY) < 25){
+        						if(shapeColor[i/2] != Color.BLACK){
+        							shapeColor[i/2] = Color.BLACK;
+        							mTouchedCount--;
+        						}
+        					}
+
+        				}
+
+
+        				//Move our shapes
+        				shapeLocationPairs[i] = shapeLocationPairs[i]  + velocityPairs[i];		    // Move X
+        				shapeLocationPairs[i+1] = shapeLocationPairs[i+1]  + velocityPairs[i+1];    //Move Y
+
+        				// Check if our shapes are touching a wall, if so change their direction;
+        				// TODO Predictive collisions. Current method will fail on high speed balls
+        				if(shapeLocationPairs[i] > mCanvasArea.right -25|| shapeLocationPairs[i] < mCanvasArea.left +25) velocityPairs[i] *= -1;
+
+        				if(shapeLocationPairs[i+1]  > mCanvasArea.bottom -25 || shapeLocationPairs[i+1]  < mCanvasArea.top + 25) velocityPairs[i+1] *= -1;
+
+
+
+        			}
+
+
+        		}
+        		else if (gameState == GAME_STATE_COMPLETED){
+        			
+        				fadeOutMusic();
+
+        		}
+
         		mLastTime+=50;
         		eventToConsume = false;
+
+        	}
+
+        }
+        
+        private void checkConditions(){
+        	if(mTouchedCount<=0 && gameState == GAME_STATE_RUNNING){
+        		gameState = GAME_STATE_COMPLETED;
+        		msAtEnd = System.currentTimeMillis();
+        		
         	}
         	
+        	
+        }
+        
+        private void fadeOutMusic(){
+        	
+        	if(mMusicVol > 0f){
+        	
+        		mMusicVol -= 0.05f;
+        		mMediaPlayer.setVolume(mMusicVol,mMusicVol);
+        	}
+        	else{
+        		if(mMediaPlayer.isPlaying()){
+        			mMediaPlayer.stop();
+        		}
+        	}
         }
         
         private void doTouchEvent(float x, float y){
@@ -400,6 +504,8 @@ public class FBView extends SurfaceView implements SurfaceHolder.Callback{
             }
             
         }
+        
+        
         
         
         
